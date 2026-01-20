@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Design Generator + Vertical Floor Plan</title>
+    <title>AI Design Generator + Smart Floor Plan</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -43,13 +43,12 @@
         const IconPhone = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
         const IconEdit = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 
-        // --- Helper: Fetch with Retry (Updated to use internal API) ---
+        // --- Helper: Fetch with Retry ---
         async function fetchWithRetry(url, options, retries = 3, backoff = 2000) {
             try {
                 const response = await fetch(url, options);
                 if (!response.ok) {
                     const errorText = await response.text();
-                    
                     if (response.status === 429 || response.status >= 500) {
                         if (retries > 0) {
                             await new Promise(r => setTimeout(r, backoff));
@@ -68,45 +67,31 @@
             }
         }
 
-        // --- Helper: Robust JSON Cleaner ---
         const cleanJsonString = (str) => {
             if (!str) return '{}';
             try {
                 const startIndex = str.indexOf('{');
                 const endIndex = str.lastIndexOf('}');
-                if (startIndex !== -1 && endIndex !== -1) {
-                    return str.substring(startIndex, endIndex + 1);
-                }
+                if (startIndex !== -1 && endIndex !== -1) return str.substring(startIndex, endIndex + 1);
                 return str;
-            } catch (e) {
-                return str;
-            }
+            } catch (e) { return str; }
         };
 
         // --- Main App ---
         function App() {
-            // Note: API Key is now handled securely on the server side (Vercel)
             const [adText, setAdText] = useState('ကမာရွတ်၊ လှည်းတန်းအနီး\n၁၂ ပေ ၅၀၊ ၆ လွှာ (ဓာတ်လှေကားပါ)\nဈေးနှုန်း - ၁၅၀၀ သိန်း\nကားပါကင်ရ၊ လုံခြုံရေးရှိ\n\nဆက်သွယ်ရန် - 09-12345678');
-            
-            // Text Screenshot Input
             const [textImageFile, setTextImageFile] = useState(null);
             const [textImagePreview, setTextImagePreview] = useState(null);
-
             const [imageFile, setImageFile] = useState(null);
             const [imagePreview, setImagePreview] = useState(null);
-            
             const [logoFile, setLogoFile] = useState(null);
             const [logoPreview, setLogoPreview] = useState(null);
-            
-            // Chart Image State
             const [chartImageFile, setChartImageFile] = useState(null);
             const [chartImagePreview, setChartImagePreview] = useState(null);
             const [isAnalyzingChart, setIsAnalyzingChart] = useState(false);
-
             const [isGenerating, setIsGenerating] = useState(false);
             const [error, setError] = useState('');
             
-            // Design Data State
             const [designData, setDesignData] = useState({
                 title: "အဆင့်မြင့် ကွန်ဒို",
                 subtitle: "ရောင်းရန်ရှိသည်",
@@ -116,34 +101,24 @@
                 contact: "09-12345678"
             });
 
-            // Floor Plan State
             const [floorConfig, setFloorConfig] = useState({ floors: 6, unitsPerFloor: 2 });
             const [floorUnits, setFloorUnits] = useState({});
 
-            // Initialize/Regenerate Grid
+            // Initialize Grid
             useEffect(() => {
                 const newUnits = {};
                 for (let f = 1; f <= floorConfig.floors; f++) {
                     for (let u = 1; u <= floorConfig.unitsPerFloor; u++) {
                         const id = `${f}-${u}`;
-                        if (floorUnits[id]) {
-                             newUnits[id] = floorUnits[id];
-                        } else {
-                             newUnits[id] = { id, floor: f, unit: u, status: 'available' };
-                        }
+                        if (floorUnits[id]) newUnits[id] = floorUnits[id];
+                        else newUnits[id] = { id, floor: f, unit: u, status: 'available', price: '' };
                     }
                 }
                 setFloorUnits(newUnits);
             }, [floorConfig.floors, floorConfig.unitsPerFloor]);
 
-            const updateDesignField = (field, value) => {
-                setDesignData(prev => ({ ...prev, [field]: value }));
-            };
-
-            const updateFeatures = (text) => {
-                const features = text.split('\n');
-                setDesignData(prev => ({ ...prev, features: features }));
-            };
+            const updateDesignField = (field, value) => setDesignData(prev => ({ ...prev, [field]: value }));
+            const updateFeatures = (text) => setDesignData(prev => ({ ...prev, features: text.split('\n') }));
 
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
@@ -154,7 +129,6 @@
                     reader.readAsDataURL(file);
                 }
             };
-
             const handleTextImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -164,7 +138,6 @@
                     reader.readAsDataURL(file);
                 }
             };
-            
             const handleLogoUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -174,7 +147,6 @@
                     reader.readAsDataURL(file);
                 }
             };
-
             const handleChartImageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -189,60 +161,36 @@
                 }
             };
 
+            // --- MANUAL EDIT LOGIC (UPDATED FOR PENTHOUSE/HIDDEN SUPPORT) ---
             const toggleUnitStatus = (id) => {
                 setFloorUnits(prev => {
                     const current = prev[id];
-                    const nextStatus = current.status === 'available' ? 'sold' : current.status === 'sold' ? 'reserved' : 'available';
+                    let nextStatus = 'sold';
+                    
+                    // Cycle: Available -> Sold -> Reserved -> HIDDEN -> Available
+                    if (current.status === 'available') nextStatus = 'sold';
+                    else if (current.status === 'sold') nextStatus = 'reserved';
+                    else if (current.status === 'reserved') nextStatus = 'hidden'; // For Penthouse/Shape correction
+                    else if (current.status === 'hidden') nextStatus = 'available';
+
                     return { ...prev, [id]: { ...current, status: nextStatus }};
                 });
             };
 
-            // 1. Analyze Text (AND Image) for Design
             const generateDesign = async () => {
                 setIsGenerating(true);
                 setError('');
                 try {
-                    const systemPrompt = `
-                        You are a professional Burmese real estate copywriter creating a poster. 
-                        The user will provide rough/draft text AND/OR an image containing text.
-                        
-                        **YOUR TASK:**
-                        1.  Read the input.
-                        2.  Rewrite content into **persuasive, professional Burmese**.
-                        3.  **CRITICAL FOR TITLE:** The title MUST be **VERY SHORT (Max 3-5 words)**. It must fit in a header. 
-                            - **Do NOT** use full sentences. 
-                            - **USE** standard Myanmar Real Estate keywords (e.g., "ကမာရွတ် ကွန်ဒိုသစ်", "လှည်းတန်း ထောင့်တိုက်", "အဆင့်မြင့် တိုက်ခန်း").
-                            - Focus on Location + Property Type or Main Benefit.
-                        
-                        **INSTRUCTIONS for fields:**
-                        - **title:** Short, Punchy Burmese Title (Max 5 words).
-                        - **subtitle:** A short tagline (e.g., "အသင့်နေထိုင်နိုင်သည်", "အရောင်း").
-                        - **price:** Use Burmese numbers/currency (e.g., "၁၅၀၀ သိန်း").
-                        - **location:** Short location string.
-                        - **features:** List 3-4 key selling points (short phrases).
-                        - **contact:** Phone numbers.
-                        
-                        Output ONLY valid JSON:
-                        {
-                            "title": "String (Burmese, Max 5 words)",
-                            "subtitle": "String (Burmese)",
-                            "price": "String (Burmese)",
-                            "location": "String (Burmese)",
-                            "features": ["String", "String"],
-                            "contact": "String"
-                        }
-                    `;
+                    const systemPrompt = `You are a Burmese real estate copywriter. Rewrite input to be persuasive. Title: Max 5 words. JSON Output.`;
                     
                     const contentParts = [];
-                    if (adText) contentParts.push({ text: `Here is the rough draft text:\n${adText}` });
+                    if (adText) contentParts.push({ text: `Rough text:\n${adText}` });
                     if (textImagePreview) {
                          const base64Content = textImagePreview.split(',')[1];
                          const mimeType = textImagePreview.substring(textImagePreview.indexOf(":") + 1, textImagePreview.indexOf(";"));
-                         contentParts.push({ text: "Here is an image/screenshot containing ad details:" });
                          contentParts.push({ inlineData: { mimeType: mimeType, data: base64Content } });
                     }
-
-                    if (contentParts.length === 0) throw new Error("စာသား (သို့) Screenshot ထည့်ပေးပါ။");
+                    if (contentParts.length === 0) throw new Error("Please provide text or image.");
 
                     const payload = {
                         contents: [{ parts: contentParts }],
@@ -250,21 +198,10 @@
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
-                    // UPDATED: Calling internal API endpoint
-                    const response = await fetchWithRetry(
-                        '/api/generate', 
-                        {
-                            method: 'POST', 
-                            headers: { 'Content-Type': 'application/json' }, 
-                            body: JSON.stringify(payload)
-                        }
-                    );
-
+                    const response = await fetchWithRetry('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     const data = await response.json();
+                    if (!data.candidates) throw new Error("No response from AI.");
                     
-                    if (!data.candidates || !data.candidates[0].content) {
-                         throw new Error("AI မှ အချက်အလက် မပြန်ပါ။ (Server Error or Invalid Response)");
-                    }
                     const parsedData = JSON.parse(cleanJsonString(data.candidates[0].content.parts[0].text));
                     setDesignData({
                         title: parsedData.title || "အဆင့်မြင့် ကွန်ဒို",
@@ -274,14 +211,10 @@
                         features: parsedData.features || [],
                         contact: parsedData.contact || ""
                     });
-                } catch (err) { 
-                    console.error(err); 
-                    setError('စနစ်အလုပ်များနေပါသည် (သို့) အမှားရှိနေသည်။ ပြန်ကြိုးစားကြည့်ပါ။ (' + err.message + ')'); 
-                } 
+                } catch (err) { setError(err.message); } 
                 finally { setIsGenerating(false); }
             };
 
-            // --- UPDATED AI CHART ANALYZER ---
             const analyzeChartImage = async (base64Image) => {
                 setIsAnalyzingChart(true);
                 setError('');
@@ -289,37 +222,17 @@
                     const base64Content = base64Image.split(',')[1];
                     const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
 
-                    // --- NEW PROMPT FOR BETTER ACCURACY ---
+                    // --- ADVANCED PROMPT (Includes Penthouse Detection) ---
                     const systemPrompt = `
-                        Analyze this real estate building floor plan chart strictly.
+                        Analyze real estate chart. Types: Visual Stack, Table, List.
+                        Return JSON: { floors, unitsPerFloor, units: [{floor, unit, status, price}] }.
                         
-                        **CRITICAL READING RULES:**
-                        1.  **READ DIRECTION:** This is a building. Read from **BOTTOM to TOP**.
-                            - The BOTTOM row is usually "Ground Floor" (GFL / G).
-                            - The rows go UP: 1FL, 2FL, 3FL, etc.
-                        2.  **STATUS DETECTION:**
-                            - Text "Sold Out" = "sold"
-                            - Text "Sold" = "sold"
-                            - Symbol "X" or "Cross" = "sold"
-                            - Red background = "sold"
-                            - Text "Reserved" or "Booked" = "reserved"
-                        3.  **AVAILABLE:** - Only mark as "available" if there is a **PRICE** (e.g., "4300", "1500", "1200L") or the box is empty/clean.
-                            - If you see a number like "4300", extract it as the "price".
-
-                        **OUTPUT:**
-                        Return ONLY a JSON object:
-                        {
-                            "floors": number (Total count of rows),
-                            "unitsPerFloor": number (Columns),
-                            "units": [
-                                { 
-                                  "floor": number (Use 0 for GFL, 1 for 1st Floor, etc. matching the image labels), 
-                                  "unit": number (Column number 1, 2...), 
-                                  "status": "available" | "sold" | "reserved",
-                                  "price": "string" (Example: "4300")
-                                }
-                            ]
-                        }
+                        Rules:
+                        1. Read Bottom-Up for visual stacks.
+                        2. Detect Status: "Sold", "X", "Red" -> "sold". "Reserved" -> "reserved". Price -> "available".
+                        3. **PENTHOUSE/UNEVEN COLUMNS:** - If a top floor has fewer units than lower floors (e.g., Penthouse), mark the missing/empty slot as **"hidden"**.
+                           - Example: Floor 8 has only 1 unit, but Floor 1-7 have 2. Mark unit 8-2 as "hidden".
+                        4. Convert Myanmar numbers/text.
                     `;
 
                     const payload = {
@@ -327,71 +240,38 @@
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
-                    // UPDATED: Calling internal API endpoint
-                    const response = await fetchWithRetry(
-                        '/api/generate', 
-                        {
-                            method: 'POST', 
-                            headers: { 'Content-Type': 'application/json' }, 
-                            body: JSON.stringify(payload)
-                        }
-                    );
-
+                    const response = await fetchWithRetry('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     const data = await response.json();
-                    if (!data.candidates || !data.candidates[0].content) {
-                         throw new Error("AI မှ ပုံကို မဖတ်နိုင်ပါ။");
-                    }
+                    if (!data.candidates) throw new Error("AI failed to read image.");
+                    
                     const result = JSON.parse(cleanJsonString(data.candidates[0].content.parts[0].text));
 
-                    if (result.floors && result.unitsPerFloor) {
-                        setFloorConfig({ floors: result.floors, unitsPerFloor: result.unitsPerFloor });
+                    if (result.floors) {
+                        const finalUnitsPerFloor = result.unitsPerFloor || 1;
+                        setFloorConfig({ floors: result.floors, unitsPerFloor: finalUnitsPerFloor });
                         const newUnits = {};
                         
-                        // Default Initialize
+                        // Create Grid
                         for (let f = 1; f <= result.floors; f++) {
-                            for (let u = 1; u <= result.unitsPerFloor; u++) {
-                                // Adjusting ID logic: strictly 1-based for the UI grid
+                            for (let u = 1; u <= finalUnitsPerFloor; u++) {
                                 newUnits[`${f}-${u}`] = { id: `${f}-${u}`, floor: f, unit: u, status: 'available', price: '' };
                             }
                         }
-
-                        // Mapping AI Result to State
+                        // Apply AI Data
                         if (result.units) {
                             result.units.forEach(u => {
-                                // Conversion: If AI returns floor 0 (GFL), we might map it to row 1 for our grid system, 
-                                // OR relies on total floor count. Here we try to match the UI's simple row count.
-                                // If the chart has GFL + 7 Floors = 8 Rows.
-                                // If AI says Floor 0, 1, 2... we need to be careful.
-                                // Simple fix: We just map based on the array order or try to match exactly if possible.
-                                
-                                // Let's try to map "Floor 0" to "Floor 1" in our grid if the AI sends 0.
-                                let mapFloor = u.floor;
-                                if (mapFloor === 0) mapFloor = 1; 
-                                else if (result.floors === 8 && mapFloor <= 7) mapFloor = mapFloor + 1; // Shift for GFL based systems if needed
-
-                                // Fallback: just use strict row index if AI returns logical rows 1-8
-                                // But if AI follows instructions and returns 0 for GFL, we treat 0 as 1 (Visual bottom).
-                                
+                                let mapFloor = u.floor === 0 ? 1 : u.floor;
+                                if (mapFloor > result.floors) mapFloor = result.floors;
                                 const id = `${mapFloor}-${u.unit}`;
                                 if (newUnits[id]) {
                                     newUnits[id].status = u.status;
-                                    if(u.price) newUnits[id].price = u.price; 
-                                } else {
-                                    // Try direct match
-                                    const directId = `${u.floor}-${u.unit}`;
-                                    if(newUnits[directId]) {
-                                        newUnits[directId].status = u.status;
-                                        if(u.price) newUnits[directId].price = u.price;
-                                    }
+                                    if (u.price) newUnits[id].price = u.price;
                                 }
                             });
                         }
                         setFloorUnits(newUnits);
                     }
-                } catch (err) { 
-                    console.error(err); 
-                    setError('ပုံရိပ်ဖတ်ရှုမရနိုင်ပါ (သို့) စနစ်အလုပ်များနေပါသည်: ' + err.message); 
-                } 
+                } catch (err) { setError('Error reading chart: ' + err.message); } 
                 finally { setIsAnalyzingChart(false); }
             };
 
@@ -415,7 +295,6 @@
                     <main className="max-w-7xl mx-auto p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
                         {/* Control Panel */}
                         <div className="lg:col-span-4 space-y-6">
-                            {/* Removed API Key Input Field - No longer needed on client side */}
                             
                             {/* 1. Text Data */}
                             <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-lg">
@@ -443,63 +322,15 @@
                                 {/* Manual Edit Section */}
                                 <div className="mt-6 pt-4 border-t border-gray-100">
                                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-1"><IconEdit className="w-3 h-3" /> အချက်အလက်များ ပြင်ဆင်ရန်</h3>
-                                    
                                     <div className="space-y-3">
-                                        <div>
-                                            <label className="text-[10px] text-gray-400 block mb-1">ခေါင်းစဉ်</label>
-                                            <input 
-                                                type="text" 
-                                                value={designData.title}
-                                                onChange={(e) => updateDesignField('title', e.target.value)}
-                                                className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] text-gray-400 block mb-1">ခေါင်းစဉ်ငယ်</label>
-                                            <input 
-                                                type="text" 
-                                                value={designData.subtitle}
-                                                onChange={(e) => updateDesignField('subtitle', e.target.value)}
-                                                className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none"
-                                            />
-                                        </div>
+                                        <div><label className="text-[10px] text-gray-400 block mb-1">ခေါင်းစဉ်</label><input type="text" value={designData.title} onChange={(e) => updateDesignField('title', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none" /></div>
+                                        <div><label className="text-[10px] text-gray-400 block mb-1">ခေါင်းစဉ်ငယ်</label><input type="text" value={designData.subtitle} onChange={(e) => updateDesignField('subtitle', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none" /></div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="text-[10px] text-gray-400 block mb-1">ဈေးနှုန်း</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={designData.price}
-                                                    onChange={(e) => updateDesignField('price', e.target.value)}
-                                                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-gray-400 block mb-1">ဖုန်း</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={designData.contact}
-                                                    onChange={(e) => updateDesignField('contact', e.target.value)}
-                                                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none"
-                                                />
-                                            </div>
+                                            <div><label className="text-[10px] text-gray-400 block mb-1">ဈေးနှုန်း</label><input type="text" value={designData.price} onChange={(e) => updateDesignField('price', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none" /></div>
+                                            <div><label className="text-[10px] text-gray-400 block mb-1">ဖုန်း</label><input type="text" value={designData.contact} onChange={(e) => updateDesignField('contact', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none" /></div>
                                         </div>
-                                        <div>
-                                            <label className="text-[10px] text-gray-400 block mb-1">တည်နေရာ</label>
-                                            <input 
-                                                type="text" 
-                                                value={designData.location}
-                                                onChange={(e) => updateDesignField('location', e.target.value)}
-                                                className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] text-gray-400 block mb-1">အချက်အလက်များ (တစ်ကြောင်းလျှင် တစ်ခု)</label>
-                                            <textarea 
-                                                value={designData.features.join('\n')}
-                                                onChange={(e) => updateFeatures(e.target.value)}
-                                                className="w-full h-20 border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none resize-none"
-                                            />
-                                        </div>
+                                        <div><label className="text-[10px] text-gray-400 block mb-1">တည်နေရာ</label><input type="text" value={designData.location} onChange={(e) => updateDesignField('location', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none" /></div>
+                                        <div><label className="text-[10px] text-gray-400 block mb-1">အချက်အလက်များ</label><textarea value={designData.features.join('\n')} onChange={(e) => updateFeatures(e.target.value)} className="w-full h-20 border border-gray-200 rounded px-2 py-1 text-sm focus:border-[#e30147] outline-none resize-none" /></div>
                                     </div>
                                 </div>
                             </div>
@@ -510,6 +341,7 @@
                                     <IconBuilding className="w-5 h-5 text-[#e30147]" />
                                     2. အခန်းအနေအထား
                                 </h2>
+                                <p className="text-[10px] text-gray-500 mb-2">* Penthouse (၁ ခန်းတွဲ) လိုချင်လျှင် ပိုနေသောအကွက်ကို ၃-၄ ချက်နှိပ်ပြီး ဖျောက်လိုက်ပါ။</p>
                                 <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
                                     <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors bg-white relative overflow-hidden group">
                                         {chartImagePreview ? <img src={chartImagePreview} className="w-full h-full object-contain" /> : <div className="flex flex-col items-center text-blue-400"><IconScan className="w-6 h-6 mb-1" /><span className="text-[10px] font-bold">ဇယားပုံတင်ရန်</span></div>}
@@ -532,6 +364,7 @@
                                                     let bgClass = 'bg-white border-gray-300';
                                                     if(status === 'sold') bgClass = 'bg-red-500 border-red-600';
                                                     if(status === 'reserved') bgClass = 'bg-yellow-400 border-yellow-500';
+                                                    if(status === 'hidden') bgClass = 'bg-gray-100 border-gray-100 opacity-20';
                                                     return (<button key={id} onClick={() => toggleUnitStatus(id)} className={`w-6 h-6 border rounded text-[8px] flex items-center justify-center ${bgClass}`} title={`Floor ${f} Unit ${u}`}></button>)
                                                 })}
                                             </div>
@@ -551,25 +384,13 @@
                                 
                                 {/* 1. HEADER (12%) - UPDATED FOR LOGO & TEXT */}
                                 <div className="h-[12%] bg-white px-6 flex items-center justify-between border-b-2 border-[#e30147] py-2">
-                                    {/* UPDATED: Logo Container - Wider and Flexible */}
                                     <div className="h-full max-w-[180px] flex items-center justify-start">
-                                        {logoPreview ? (
-                                            <img src={logoPreview} className="h-full w-auto object-contain" alt="Logo" /> 
-                                        ) : (
-                                            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-300">LOGO</div>
-                                        )}
+                                        {logoPreview ? <img src={logoPreview} className="h-full w-auto object-contain" alt="Logo" /> : <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-300">LOGO</div>}
                                     </div>
-                                    {/* UPDATED: Text Container - Better line-height for Burmese */}
                                     <div className="text-right flex-1 pl-4 flex flex-col justify-center">
-                                        <p className="text-xs font-bold text-[#e30147] tracking-wider uppercase leading-relaxed pb-0.5">
-                                            {designData.subtitle}
-                                        </p>
-                                        <h1 className="text-2xl font-bold text-gray-900 leading-snug">
-                                            {designData.title}
-                                        </h1>
-                                        <div className="flex items-center justify-end text-gray-600 text-xs mt-1 font-medium leading-normal">
-                                            {designData.location}<IconMapPin className="w-3.5 h-3.5 ml-1 text-[#e30147] flex-shrink-0" />
-                                        </div>
+                                        <p className="text-xs font-bold text-[#e30147] tracking-wider uppercase leading-relaxed pb-0.5">{designData.subtitle}</p>
+                                        <h1 className="text-2xl font-bold text-gray-900 leading-snug">{designData.title}</h1>
+                                        <div className="flex items-center justify-end text-gray-600 text-xs mt-1 font-medium leading-normal">{designData.location}<IconMapPin className="w-3.5 h-3.5 ml-1 text-[#e30147] flex-shrink-0" /></div>
                                     </div>
                                 </div>
 
@@ -577,7 +398,6 @@
                                 <div className="h-[78%] flex">
                                     {/* Left: Content (60%) */}
                                     <div className="w-[60%] flex flex-col h-full bg-white">
-                                        {/* Image */}
                                         <div className="h-[55%] bg-gray-200 relative group overflow-hidden">
                                             {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100"><span className="text-xs font-bold">Image Area</span></div>}
                                             <div className="absolute top-4 left-0 bg-[#e30147] text-white px-5 py-2 rounded-r-lg shadow-md">
@@ -585,17 +405,12 @@
                                                 <span className="text-xl font-bold font-eng">{designData.price}</span>
                                             </div>
                                         </div>
-                                        
-                                        {/* Features List */}
                                         <div className="h-[45%] p-6 flex flex-col justify-center bg-white relative">
                                             <div className="absolute top-0 right-0 w-20 h-20 bg-gray-50 rounded-bl-full"></div>
                                             <h3 className="text-[#e30147] font-bold text-sm uppercase mb-4 border-l-4 border-[#e30147] pl-3">အထူးဝန်ဆောင်မှုများ</h3>
                                             <ul className="space-y-3">
                                                 {designData.features && designData.features.slice(0,4).map((f,i) => (
-                                                    <li key={i} className="flex items-center text-sm text-gray-700 font-medium">
-                                                        <span className="w-2 h-2 bg-[#e30147] rounded-full mr-3"></span>
-                                                        {f}
-                                                    </li>
+                                                    <li key={i} className="flex items-center text-sm text-gray-700 font-medium"><span className="w-2 h-2 bg-[#e30147] rounded-full mr-3"></span>{f}</li>
                                                 ))}
                                             </ul>
                                         </div>
@@ -611,7 +426,6 @@
                                             </div>
                                         </div>
                                         
-                                        {/* Auto-Adjust Grid Container */}
                                         <div className="flex-1 p-3 overflow-hidden flex flex-col justify-center">
                                             <div className="flex flex-col w-full h-full justify-between">
                                                 {gridFloors.map((f) => (
@@ -624,6 +438,11 @@
                                                                 const unitData = floorUnits[id];
                                                                 const status = unitData?.status || 'available';
                                                                 const price = unitData?.price || '';
+
+                                                                // HANDLE HIDDEN STATUS
+                                                                if (status === 'hidden') {
+                                                                    return <div key={id} className="flex-1 invisible"></div>;
+                                                                }
 
                                                                 let styles = "bg-white border-2 border-green-500 text-green-700";
                                                                 let textContent = (
@@ -662,14 +481,9 @@
                                     <div className="absolute top-0 right-0 bottom-0 w-1/2 bg-[#e30147] transform skew-x-12 translate-x-10"></div>
                                     <div className="relative z-10 flex items-center gap-3">
                                         <div className="bg-white/10 p-2 rounded-full"><IconPhone className="w-5 h-5 text-[#e30147]" /></div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-300 uppercase tracking-widest mb-0.5">ဆက်သွယ်ရန်</p>
-                                            <p className="text-xl font-bold font-eng">{designData.contact}</p>
-                                        </div>
+                                        <div><p className="text-[10px] text-gray-300 uppercase tracking-widest mb-0.5">ဆက်သွယ်ရန်</p><p className="text-xl font-bold font-eng">{designData.contact}</p></div>
                                     </div>
-                                    <div className="relative z-10 text-right pr-4">
-                                        <p className="text-xs font-bold uppercase tracking-widest">အမြန်ဆုံးဆက်သွယ်ပါ</p>
-                                    </div>
+                                    <div className="relative z-10 text-right pr-4"><p className="text-xs font-bold uppercase tracking-widest">အမြန်ဆုံးဆက်သွယ်ပါ</p></div>
                                 </div>
 
                             </div>
