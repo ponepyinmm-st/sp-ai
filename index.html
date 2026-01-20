@@ -549,17 +549,25 @@
                             {/* --- CANVAS (SPLIT LAYOUT) --- */}
                             <div className="relative w-full max-w-[500px] aspect-[1080/1350] bg-white shadow-2xl overflow-hidden flex flex-col text-gray-900">
                                 
-                                {/* 1. HEADER (12%) */}
-                                <div className="h-[12%] bg-white px-6 flex items-center justify-between border-b-2 border-[#e30147]">
-                                    <div className="h-14 w-14 flex-shrink-0 flex items-center justify-center">
-                                        {logoPreview ? <img src={logoPreview} className="h-full w-full object-contain" /> : <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-300">LOGO</div>}
+                                {/* 1. HEADER (12%) - UPDATED FOR LOGO & TEXT */}
+                                <div className="h-[12%] bg-white px-6 flex items-center justify-between border-b-2 border-[#e30147] py-2">
+                                    {/* UPDATED: Logo Container - Wider and Flexible */}
+                                    <div className="h-full max-w-[180px] flex items-center justify-start">
+                                        {logoPreview ? (
+                                            <img src={logoPreview} className="h-full w-auto object-contain" alt="Logo" /> 
+                                        ) : (
+                                            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-300">LOGO</div>
+                                        )}
                                     </div>
-                                    <div className="text-right overflow-hidden flex-1 pl-4">
-                                        <p className="text-xs font-bold text-[#e30147] tracking-wider uppercase truncate">{designData.subtitle}</p>
-                                        <h1 className="text-2xl font-bold text-gray-900 leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                                    {/* UPDATED: Text Container - Better line-height for Burmese */}
+                                    <div className="text-right flex-1 pl-4 flex flex-col justify-center">
+                                        <p className="text-xs font-bold text-[#e30147] tracking-wider uppercase leading-relaxed pb-0.5">
+                                            {designData.subtitle}
+                                        </p>
+                                        <h1 className="text-2xl font-bold text-gray-900 leading-snug">
                                             {designData.title}
                                         </h1>
-                                        <div className="flex items-center justify-end text-gray-600 text-xs mt-1 font-medium truncate">
+                                        <div className="flex items-center justify-end text-gray-600 text-xs mt-1 font-medium leading-normal">
                                             {designData.location}<IconMapPin className="w-3.5 h-3.5 ml-1 text-[#e30147] flex-shrink-0" />
                                         </div>
                                     </div>
