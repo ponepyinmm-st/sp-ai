@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vertical Floor Plan Generator (500x1350)</title>
+    <title>Smart Floor Plan Generator (Burmese OCR)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -16,7 +16,7 @@
     <style>
         body { font-family: 'Noto Sans Myanmar', sans-serif; background-color: #e5e7eb; }
         
-        /* THE MAIN CANVAS (500x1350) */
+        /* THE MAIN CANVAS (500x1350) - Fixed Ratio */
         .canvas-container {
             width: 500px;
             height: 1350px;
@@ -33,9 +33,12 @@
         .canvas-header {
             background-color: #b91c1c; /* Dark Red */
             color: white;
-            padding: 20px;
+            padding: 25px;
             text-align: center;
             flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         /* Grid Body - Stretches to fill height */
@@ -45,36 +48,39 @@
             flex-direction: column;
             padding: 20px;
             background-color: #fff;
+            justify-content: space-evenly; /* Distributes rows evenly */
         }
 
-        /* Each Floor Row - Stretches evenly */
+        /* Each Floor Row */
         .floor-row {
-            flex: 1; /* This makes rows stretch to fill the 1350px height */
+            flex: 1; 
             display: flex;
             align-items: stretch;
-            margin-bottom: 8px;
-            border: 1px solid #f1f5f9;
-            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
             overflow: hidden;
+            max-height: 160px; /* Prevent too tall rows on small unit counts */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
 
         .floor-label {
-            width: 80px;
-            background-color: #f8fafc;
+            width: 90px;
+            background-color: #f1f5f9;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
             color: #334155;
-            font-size: 18px; /* Larger font for big canvas */
-            border-right: 1px solid #e2e8f0;
+            font-size: 20px;
+            border-right: 1px solid #cbd5e1;
         }
 
         .units-container {
             flex: 1;
             display: flex;
             padding: 8px;
-            gap: 8px;
+            gap: 10px;
             background: white;
         }
 
@@ -86,7 +92,7 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            border: 3px solid; /* Thicker border for visibility */
+            border: 3px solid; 
             transition: all 0.2s;
             position: relative;
         }
@@ -116,17 +122,17 @@
 
         .price-text {
             font-weight: 800;
-            font-size: 16px;
+            font-size: 18px;
             color: #b91c1c;
             background: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin-bottom: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .status-text {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
         }
         
@@ -135,7 +141,7 @@
             padding: 15px;
             text-align: center;
             background: #f8fafc;
-            color: #64748b;
+            color: #94a3b8;
             font-size: 12px;
             border-top: 1px solid #e2e8f0;
             flex-shrink: 0;
@@ -232,14 +238,29 @@
                     const base64Content = base64Image.split(',')[1];
                     const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
                     
+                    // --- IMPROVED PROMPT WITH BURMESE MAPPING ---
                     const systemPrompt = `
-                        Analyze floor plan. Extract GRID + PRICES.
+                        Analyze this Real Estate Floor Plan / Price List image.
+                        The text is likely in BURMESE (Myanmar). You must act as a translator and data extractor.
+
+                        **STRICT MAPPING RULES (Cheat Sheet):**
+                        1. **Numbers:** Convert Myanmar digits to English.
+                           - ၁ -> 1, ၂ -> 2, ၃ -> 3, ၄ -> 4, ၅ -> 5
+                           - ၆ -> 6, ၇ -> 7, ၈ -> 8, ၉ -> 9, ၀ -> 0
+                        2. **Status Keywords:**
+                           - "ရောင်းပြီး" (Sold), "ပိတ်" (Closed), "Sold Out", "X" -> Status: "sold"
+                           - "စာရင်းသွင်း" (Registered/Booked) -> Status: "reserved"
+                        3. **Price Indicators:**
+                           - Look for "သိန်း" (Lakhs). E.g., "1500 သိန်း", "၁၅၀၀ သိန်း".
+                           - If a box contains a large number (e.g., 1000+) or currency text, it is "available" and that is the price.
+                        4. **Visuals:**
+                           - RED background usually means "sold".
+                           - GREEN or WHITE usually means "available".
+
+                        **TASK:**
                         Return JSON: { "floors": n, "unitsPerFloor": n, "units": [{"floor":n, "unit":n, "status":"sold"|"available"|"reserved"|"hidden", "price": "string"}] }
-                        Rules:
-                        1. Visual Stack: Bottom = Floor 1.
-                        2. "X"/"Sold"/"Red" = "sold".
-                        3. EXTRACT PRICES (e.g., "1500", "2500"). If price exists, status is "available".
-                        4. PENTHOUSE: If fewer units on top, mark as "hidden".
+                        
+                        *Note: Read visual stacks from BOTTOM (Floor 1) to TOP.*
                     `;
 
                     const payload = {
@@ -298,14 +319,14 @@
                 <div className="flex flex-col gap-6 items-center w-full">
                     
                     {/* Controls */}
-                    <div className="bg-white p-4 rounded-xl shadow w-full max-w-[500px] border border-gray-200">
-                        <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Generator</h1>
+                    <div className="bg-white p-4 rounded-xl shadow w-full max-w-[500px] border border-gray-200 mt-4">
+                        <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Auto-Generator</h1>
                         
                          <label className="flex items-center justify-center w-full h-16 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition bg-gray-50 mb-4">
                             {isAnalyzing ? (
                                 <div className="animate-pulse text-blue-600 font-bold text-sm">AI ဖတ်နေပါသည်...</div>
                             ) : (
-                                chartImagePreview ? <div className="text-green-600 font-bold text-sm">New Image Loaded</div> : <span className="text-gray-400 text-sm font-bold">Screenshot တင်ရန်</span>
+                                chartImagePreview ? <div className="text-green-600 font-bold text-sm">Image Loaded</div> : <span className="text-gray-400 text-sm font-bold">Screenshot တင်ရန်</span>
                             )}
                             <input type="file" className="hidden" accept="image/*" onChange={handleChartUpload} disabled={isAnalyzing} />
                         </label>
@@ -326,8 +347,7 @@
                     {/* --- CANVAS 500x1350 --- */}
                     <div className="canvas-container">
                         <div className="canvas-header">
-                            <h2 className="text-2xl font-bold tracking-wide">FLOOR PLAN & PRICES</h2>
-                            <p className="text-sm opacity-90 mt-1">Available Units Update</p>
+                            <h2 className="text-3xl font-bold tracking-wide uppercase">Floor Plan & Prices</h2>
                         </div>
                         
                         <div className="grid-body">
@@ -379,6 +399,7 @@
                         </div>
                     </div>
                     
+                    <p className="text-gray-400 text-xs mb-10">Screenshot ရိုက်ရန် အဆင်သင့်ဖြစ်ပါပြီ</p>
                 </div>
             );
         }
