@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Floor Plan Generator (Manual Price Edit)</title>
+    <title>Smart Floor Plan Generator (Text + Paste + Save)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
 
@@ -102,11 +104,10 @@
         .status-sold { border-color: #ef4444; background-color: #fee2e2; color: #ef4444; }
         .status-reserved { border-color: #eab308; background-color: #fef9c3; color: #854d0e; }
         
-        /* Hidden but clickable for editing */
         .status-hidden { 
             border-color: #e5e7eb; 
             background-color: #f9fafb; 
-            opacity: 0.4; 
+            opacity: 0.3; 
             border-style: dashed;
         }
 
@@ -143,7 +144,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- Helper: Fetch ---
         async function fetchWithRetry(url, options, retries = 2, backoff = 1000) {
@@ -177,6 +178,7 @@
 
         function App() {
             const [chartImagePreview, setChartImagePreview] = useState(null);
+            const [rawText, setRawText] = useState('');
             const [isAnalyzing, setIsAnalyzing] = useState(false);
             const [error, setError] = useState('');
             
@@ -186,6 +188,27 @@
             // Grid Data
             const [floorConfig, setFloorConfig] = useState({ floors: 6, unitsPerFloor: 2 });
             const [floorUnits, setFloorUnits] = useState({});
+
+            // PASTE EVENT LISTENER
+            useEffect(() => {
+                const handlePaste = (e) => {
+                    const items = e.clipboardData.items;
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.indexOf('image') !== -1) {
+                            const blob = items[i].getAsFile();
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                setChartImagePreview(event.target.result);
+                                // Optional: Auto analyze on paste? 
+                                // analyzeData(event.target.result, rawText); 
+                            };
+                            reader.readAsDataURL(blob);
+                        }
+                    }
+                };
+                window.addEventListener('paste', handlePaste);
+                return () => window.removeEventListener('paste', handlePaste);
+            }, [rawText]);
 
             // Initialize Grid
             useEffect(() => {
@@ -200,15 +223,29 @@
                 setFloorUnits(newUnits);
             }, [floorConfig.floors, floorConfig.unitsPerFloor]);
 
-            const handleChartUpload = async (e) => {
+            const handleChartUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     const reader = new FileReader();
-                    reader.onloadend = async () => {
+                    reader.onloadend = () => {
                         setChartImagePreview(reader.result);
-                        await analyzeChartImage(reader.result);
                     };
                     reader.readAsDataURL(file);
+                }
+            };
+
+            const handleDownloadImage = async () => {
+                const element = document.getElementById('canvas-export');
+                if (!element) return;
+                
+                try {
+                    const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+                    const link = document.createElement('a');
+                    link.download = `floor-plan-${Date.now()}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                } catch (err) {
+                    alert("Image save failed: " + err.message);
                 }
             };
 
@@ -238,25 +275,50 @@
                 }
             };
 
-            const analyzeChartImage = async (base64Image) => {
+            const analyzeData = async () => {
+                if (!chartImagePreview && !rawText.trim()) {
+                    setError("Please upload an image OR enter text.");
+                    return;
+                }
+
                 setIsAnalyzing(true);
                 setError('');
                 try {
-                    const base64Content = base64Image.split(',')[1];
-                    const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
+                    let promptParts = [];
+                    
+                    // Add Text if exists
+                    if (rawText.trim()) {
+                        promptParts.push({ text: `Analyze this Text Description:\n${rawText}` });
+                    }
+
+                    // Add Image if exists
+                    let mimeType = '';
+                    let base64Content = '';
+                    if (chartImagePreview) {
+                        base64Content = chartImagePreview.split(',')[1];
+                        mimeType = chartImagePreview.substring(chartImagePreview.indexOf(":") + 1, chartImagePreview.indexOf(";"));
+                        promptParts.push({ text: "Also analyze this Image:" });
+                        promptParts.push({ inlineData: { mimeType: mimeType, data: base64Content } });
+                    }
                     
                     const systemPrompt = `
-                        Analyze floor plan. Extract GRID + PRICES.
+                        You are a Real Estate Data Extractor.
+                        Input can be an IMAGE or TEXT describing floor prices.
+
+                        **MAPPING RULES:**
+                        1. **Text Parsing:** - "Ground floor" or "GFL" = Floor 1. "First floor" = Floor 2, etc.
+                           - "မြေရှင်" (Landowner) -> Status: "sold".
+                           - "Sold" / "X" -> Status: "sold".
+                           - Prices (e.g., "2500", "2500 Lakhs") -> Status: "available", Price: "2500".
+                        2. **Visual Stack:** Bottom = Floor 1.
+                        3. **PENTHOUSE:** If top floors have fewer units, mark empty as "hidden".
+
+                        **TASK:**
                         Return JSON: { "floors": n, "unitsPerFloor": n, "units": [{"floor":n, "unit":n, "status":"sold"|"available"|"reserved"|"hidden", "price": "string"}] }
-                        Rules:
-                        1. Visual Stack: Bottom = Floor 1.
-                        2. "X"/"Sold"/"Red" = "sold".
-                        3. EXTRACT PRICES. If price exists, status is "available".
-                        4. PENTHOUSE: If fewer units on top, mark as "hidden".
                     `;
 
                     const payload = {
-                        contents: [{ parts: [{ text: systemPrompt }, { inlineData: { mimeType: mimeType, data: base64Content } }] }],
+                        contents: [{ parts: [...promptParts, { text: systemPrompt }] }],
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
@@ -312,33 +374,51 @@
                     
                     {/* Controls */}
                     <div className="bg-white p-4 rounded-xl shadow w-full max-w-[500px] border border-gray-200 mt-4">
-                        <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Auto-Generator</h1>
+                        <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Generator</h1>
                         
-                        {/* EDIT MODE TOGGLE */}
-                        <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                        {/* INPUT SECTION */}
+                        <div className="space-y-4 mb-4">
+                            {/* Text Input */}
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">စာသားဖြင့် ထည့်ရန် (Optional)</label>
+                                <textarea 
+                                    className="w-full border p-2 rounded text-sm h-20 focus:border-blue-500 outline-none" 
+                                    placeholder="Example: Ground floor - မြေရှင်, 1st Floor - 2500..."
+                                    value={rawText}
+                                    onChange={(e) => setRawText(e.target.value)}
+                                ></textarea>
+                            </div>
+
+                            {/* Image Input / Paste Area */}
+                            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition bg-gray-50 relative">
+                                {isAnalyzing ? (
+                                    <div className="animate-pulse text-blue-600 font-bold text-sm">AI ဖတ်နေပါသည်...</div>
+                                ) : (
+                                    chartImagePreview ? <div className="text-green-600 font-bold text-sm">Image Loaded (Click to Change)</div> : 
+                                    <div className="text-center">
+                                        <span className="text-gray-500 text-sm font-bold block">Screenshot တင်ရန် (သို့)</span>
+                                        <span className="text-blue-500 text-xs font-bold bg-blue-100 px-2 py-1 rounded mt-1 inline-block">Ctrl + V နှိပ်ပြီး Paste ပါ</span>
+                                    </div>
+                                )}
+                                <input type="file" className="hidden" accept="image/*" onChange={handleChartUpload} disabled={isAnalyzing} />
+                            </label>
+
                             <button 
-                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'status' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                                onClick={() => setEditMode('status')}
+                                onClick={analyzeData}
+                                disabled={isAnalyzing}
+                                className="w-full bg-[#e30147] text-white py-2 rounded-lg font-bold shadow hover:bg-red-700 transition"
                             >
-                                🔄 Status ပြောင်းရန်
-                            </button>
-                            <button 
-                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'price' ? 'bg-white shadow text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
-                                onClick={() => setEditMode('price')}
-                            >
-                                ✏️ ဈေးနှုန်းပြင်ရန်
+                                {isAnalyzing ? 'Processing...' : 'Generate Plan 🚀'}
                             </button>
                         </div>
 
-                         <label className="flex items-center justify-center w-full h-16 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition bg-gray-50 mb-4">
-                            {isAnalyzing ? (
-                                <div className="animate-pulse text-blue-600 font-bold text-sm">AI ဖတ်နေပါသည်...</div>
-                            ) : (
-                                chartImagePreview ? <div className="text-green-600 font-bold text-sm">Image Loaded</div> : <span className="text-gray-400 text-sm font-bold">Screenshot တင်ရန်</span>
-                            )}
-                            <input type="file" className="hidden" accept="image/*" onChange={handleChartUpload} disabled={isAnalyzing} />
-                        </label>
+                        {/* EDIT MODE TOGGLE */}
+                        <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                            <button className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'status' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`} onClick={() => setEditMode('status')}>🔄 Status</button>
+                            <button className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'price' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`} onClick={() => setEditMode('price')}>✏️ Price</button>
+                        </div>
 
+                        {/* Manual Config */}
                          <div className="flex gap-4">
                             <div className="w-1/2">
                                 <label className="text-[10px] text-gray-400 uppercase font-bold">အထပ်</label>
@@ -353,7 +433,7 @@
                     </div>
 
                     {/* --- CANVAS 500x1350 --- */}
-                    <div className="canvas-container">
+                    <div id="canvas-export" className="canvas-container">
                         <div className="canvas-header">
                             <h2 className="text-3xl font-bold tracking-wide uppercase">Floor Plan & Prices</h2>
                         </div>
@@ -406,8 +486,16 @@
                             Generated by AI RealEstate
                         </div>
                     </div>
+
+                    {/* DOWNLOAD BUTTON */}
+                    <button 
+                        onClick={handleDownloadImage}
+                        className="mb-10 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-2 transform transition hover:scale-105"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        ဓာတ်ပုံအဖြစ် သိမ်းမည်
+                    </button>
                     
-                    <p className="text-gray-400 text-xs mb-10">Screenshot ရိုက်ရန် အဆင်သင့်ဖြစ်ပါပြီ</p>
                 </div>
             );
         }
