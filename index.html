@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Floor Plan Generator (Text + Paste + Save)</title>
+    <title>Smart Floor Plan Generator (GF Support)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -72,7 +72,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            font-weight: 800; /* Bolder font for GF */
             color: #334155;
             font-size: 20px;
             border-right: 1px solid #cbd5e1;
@@ -286,31 +286,26 @@
                 try {
                     let promptParts = [];
                     
-                    // Add Text if exists
                     if (rawText.trim()) {
                         promptParts.push({ text: `Analyze this Text Description:\n${rawText}` });
                     }
 
-                    // Add Image if exists
-                    let mimeType = '';
-                    let base64Content = '';
                     if (chartImagePreview) {
-                        base64Content = chartImagePreview.split(',')[1];
-                        mimeType = chartImagePreview.substring(chartImagePreview.indexOf(":") + 1, chartImagePreview.indexOf(";"));
+                        const base64Content = chartImagePreview.split(',')[1];
+                        const mimeType = chartImagePreview.substring(chartImagePreview.indexOf(":") + 1, chartImagePreview.indexOf(";"));
                         promptParts.push({ text: "Also analyze this Image:" });
                         promptParts.push({ inlineData: { mimeType: mimeType, data: base64Content } });
                     }
                     
                     const systemPrompt = `
                         You are a Real Estate Data Extractor.
-                        Input can be an IMAGE or TEXT describing floor prices.
-
+                        
                         **MAPPING RULES:**
-                        1. **Text Parsing:** - "Ground floor" or "GFL" = Floor 1. "First floor" = Floor 2, etc.
+                        1. **Internal Logic:** Text/Image "Ground floor" or "GFL" is Floor 1 internally. "First floor" is Floor 2 internally.
                            - "မြေရှင်" (Landowner) -> Status: "sold".
                            - "Sold" / "X" -> Status: "sold".
-                           - Prices (e.g., "2500", "2500 Lakhs") -> Status: "available", Price: "2500".
-                        2. **Visual Stack:** Bottom = Floor 1.
+                           - Prices (e.g., "2500") -> Status: "available", Price: "2500".
+                        2. **Visual Stack:** Bottom is Floor 1 (GF).
                         3. **PENTHOUSE:** If top floors have fewer units, mark empty as "hidden".
 
                         **TASK:**
@@ -441,7 +436,9 @@
                         <div className="grid-body">
                             {gridFloors.map(f => (
                                 <div key={f} className="floor-row">
-                                    <div className="floor-label">{f} လွှာ</div>
+                                    {/* --- UPDATED LABEL LOGIC: 1=GF, 2=1လွှာ... --- */}
+                                    <div className="floor-label">{f === 1 ? 'GF' : `${f-1} လွှာ`}</div>
+                                    
                                     <div className="units-container">
                                         {Array.from({length: floorConfig.unitsPerFloor}).map((_, i) => {
                                             const u = i + 1;
