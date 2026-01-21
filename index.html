@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Floor Plan Generator (Burmese OCR)</title>
+    <title>Smart Floor Plan Generator (Manual Price Edit)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -48,7 +48,7 @@
             flex-direction: column;
             padding: 20px;
             background-color: #fff;
-            justify-content: space-evenly; /* Distributes rows evenly */
+            justify-content: space-evenly; 
         }
 
         /* Each Floor Row */
@@ -60,7 +60,7 @@
             border: 1px solid #e2e8f0;
             border-radius: 12px;
             overflow: hidden;
-            max-height: 160px; /* Prevent too tall rows on small unit counts */
+            max-height: 160px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
 
@@ -98,26 +98,16 @@
         }
 
         /* STATUS COLORS */
-        .status-available { 
-            border-color: #22c55e; 
-            background-color: #f0fdf4; 
-            color: #15803d; 
-        }
-        .status-sold { 
-            border-color: #ef4444; 
-            background-color: #fee2e2; 
-            color: #ef4444; 
-        }
-        .status-reserved { 
-            border-color: #eab308; 
-            background-color: #fef9c3; 
-            color: #854d0e; 
-        }
+        .status-available { border-color: #22c55e; background-color: #f0fdf4; color: #15803d; }
+        .status-sold { border-color: #ef4444; background-color: #fee2e2; color: #ef4444; }
+        .status-reserved { border-color: #eab308; background-color: #fef9c3; color: #854d0e; }
+        
+        /* Hidden but clickable for editing */
         .status-hidden { 
-            border-color: transparent; 
-            background-color: transparent; 
-            opacity: 0; 
-            pointer-events: none; 
+            border-color: #e5e7eb; 
+            background-color: #f9fafb; 
+            opacity: 0.4; 
+            border-style: dashed;
         }
 
         .price-text {
@@ -190,6 +180,9 @@
             const [isAnalyzing, setIsAnalyzing] = useState(false);
             const [error, setError] = useState('');
             
+            // UI Mode: 'status' or 'price'
+            const [editMode, setEditMode] = useState('status');
+
             // Grid Data
             const [floorConfig, setFloorConfig] = useState({ floors: 6, unitsPerFloor: 2 });
             const [floorUnits, setFloorUnits] = useState({});
@@ -219,16 +212,30 @@
                 }
             };
 
-            const toggleUnitStatus = (id) => {
-                setFloorUnits(prev => {
-                    const current = prev[id];
-                    let nextStatus = 'sold';
-                    if (current.status === 'available') nextStatus = 'sold';
-                    else if (current.status === 'sold') nextStatus = 'reserved';
-                    else if (current.status === 'reserved') nextStatus = 'hidden';
-                    else if (current.status === 'hidden') nextStatus = 'available';
-                    return { ...prev, [id]: { ...current, status: nextStatus }};
-                });
+            // HANDLE CLICK BASED ON MODE
+            const handleUnitClick = (id) => {
+                if (editMode === 'status') {
+                    // Toggle Status
+                    setFloorUnits(prev => {
+                        const current = prev[id];
+                        let nextStatus = 'sold';
+                        if (current.status === 'available') nextStatus = 'sold';
+                        else if (current.status === 'sold') nextStatus = 'reserved';
+                        else if (current.status === 'reserved') nextStatus = 'hidden';
+                        else if (current.status === 'hidden') nextStatus = 'available';
+                        return { ...prev, [id]: { ...current, status: nextStatus }};
+                    });
+                } else {
+                    // Edit Price
+                    const currentUnit = floorUnits[id];
+                    const newPrice = prompt("ဈေးနှုန်း အသစ်ထည့်ပါ (ဥပမာ - ၁၅၀၀):", currentUnit?.price || "");
+                    if (newPrice !== null) {
+                        setFloorUnits(prev => ({
+                            ...prev,
+                            [id]: { ...prev[id], price: newPrice }
+                        }));
+                    }
+                }
             };
 
             const analyzeChartImage = async (base64Image) => {
@@ -238,29 +245,14 @@
                     const base64Content = base64Image.split(',')[1];
                     const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
                     
-                    // --- IMPROVED PROMPT WITH BURMESE MAPPING ---
                     const systemPrompt = `
-                        Analyze this Real Estate Floor Plan / Price List image.
-                        The text is likely in BURMESE (Myanmar). You must act as a translator and data extractor.
-
-                        **STRICT MAPPING RULES (Cheat Sheet):**
-                        1. **Numbers:** Convert Myanmar digits to English.
-                           - ၁ -> 1, ၂ -> 2, ၃ -> 3, ၄ -> 4, ၅ -> 5
-                           - ၆ -> 6, ၇ -> 7, ၈ -> 8, ၉ -> 9, ၀ -> 0
-                        2. **Status Keywords:**
-                           - "ရောင်းပြီး" (Sold), "ပိတ်" (Closed), "Sold Out", "X" -> Status: "sold"
-                           - "စာရင်းသွင်း" (Registered/Booked) -> Status: "reserved"
-                        3. **Price Indicators:**
-                           - Look for "သိန်း" (Lakhs). E.g., "1500 သိန်း", "၁၅၀၀ သိန်း".
-                           - If a box contains a large number (e.g., 1000+) or currency text, it is "available" and that is the price.
-                        4. **Visuals:**
-                           - RED background usually means "sold".
-                           - GREEN or WHITE usually means "available".
-
-                        **TASK:**
+                        Analyze floor plan. Extract GRID + PRICES.
                         Return JSON: { "floors": n, "unitsPerFloor": n, "units": [{"floor":n, "unit":n, "status":"sold"|"available"|"reserved"|"hidden", "price": "string"}] }
-                        
-                        *Note: Read visual stacks from BOTTOM (Floor 1) to TOP.*
+                        Rules:
+                        1. Visual Stack: Bottom = Floor 1.
+                        2. "X"/"Sold"/"Red" = "sold".
+                        3. EXTRACT PRICES. If price exists, status is "available".
+                        4. PENTHOUSE: If fewer units on top, mark as "hidden".
                     `;
 
                     const payload = {
@@ -322,6 +314,22 @@
                     <div className="bg-white p-4 rounded-xl shadow w-full max-w-[500px] border border-gray-200 mt-4">
                         <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Auto-Generator</h1>
                         
+                        {/* EDIT MODE TOGGLE */}
+                        <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                            <button 
+                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'status' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                onClick={() => setEditMode('status')}
+                            >
+                                🔄 Status ပြောင်းရန်
+                            </button>
+                            <button 
+                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${editMode === 'price' ? 'bg-white shadow text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                onClick={() => setEditMode('price')}
+                            >
+                                ✏️ ဈေးနှုန်းပြင်ရန်
+                            </button>
+                        </div>
+
                          <label className="flex items-center justify-center w-full h-16 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition bg-gray-50 mb-4">
                             {isAnalyzing ? (
                                 <div className="animate-pulse text-blue-600 font-bold text-sm">AI ဖတ်နေပါသည်...</div>
@@ -379,7 +387,7 @@
                                             return (
                                                 <div 
                                                     key={id} 
-                                                    onClick={() => toggleUnitStatus(id)}
+                                                    onClick={() => handleUnitClick(id)}
                                                     className={`unit-cell ${statusClass}`}
                                                 >
                                                     {unit.price && unit.status === 'available' && (
