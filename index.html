@@ -3,33 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Design Generator + Smart Floor Plan</title>
+    <title>Vertical Floor Plan Generator (500x1350)</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Playfair+Display:wght@700&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: 'Noto Sans Myanmar', sans-serif; }
-        .font-serif-display { font-family: 'Playfair Display', serif; }
-        .font-eng { font-family: 'Lato', sans-serif; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        body { font-family: 'Noto Sans Myanmar', sans-serif; background-color: #e5e7eb; }
+        
+        /* THE MAIN CANVAS (500x1350) */
+        .canvas-container {
+            width: 500px;
+            height: 1350px;
+            background: white;
+            margin: 0 auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #ccc;
+        }
+
+        /* Header Area */
+        .canvas-header {
+            background-color: #b91c1c; /* Dark Red */
+            color: white;
+            padding: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* Grid Body - Stretches to fill height */
+        .grid-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background-color: #fff;
+        }
+
+        /* Each Floor Row - Stretches evenly */
+        .floor-row {
+            flex: 1; /* This makes rows stretch to fill the 1350px height */
+            display: flex;
+            align-items: stretch;
+            margin-bottom: 8px;
+            border: 1px solid #f1f5f9;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .floor-label {
+            width: 80px;
+            background-color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #334155;
+            font-size: 18px; /* Larger font for big canvas */
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .units-container {
+            flex: 1;
+            display: flex;
+            padding: 8px;
+            gap: 8px;
+            background: white;
+        }
+
+        .unit-cell {
+            flex: 1;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 3px solid; /* Thicker border for visibility */
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        /* STATUS COLORS */
+        .status-available { 
+            border-color: #22c55e; 
+            background-color: #f0fdf4; 
+            color: #15803d; 
+        }
+        .status-sold { 
+            border-color: #ef4444; 
+            background-color: #fee2e2; 
+            color: #ef4444; 
+        }
+        .status-reserved { 
+            border-color: #eab308; 
+            background-color: #fef9c3; 
+            color: #854d0e; 
+        }
+        .status-hidden { 
+            border-color: transparent; 
+            background-color: transparent; 
+            opacity: 0; 
+            pointer-events: none; 
+        }
+
+        .price-text {
+            font-weight: 800;
+            font-size: 16px;
+            color: #b91c1c;
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        /* Footer */
+        .canvas-footer {
+            padding: 15px;
+            text-align: center;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+            flex-shrink: 0;
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 min-h-screen">
+<body class="p-4 flex flex-col items-center">
+    
     <div id="root"></div>
+
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Icons
-        const IconSparkles = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 9h4"/><path d="M3 5h4"/></svg>;
-        const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>;
-        const IconScan = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/></svg>;
-        const IconMapPin = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
-        const IconPhone = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
-
+        // --- Helper: Fetch ---
         async function fetchWithRetry(url, options, retries = 2, backoff = 1000) {
             try {
                 const response = await fetch(url, options);
@@ -39,7 +159,7 @@
                         await new Promise(r => setTimeout(r, backoff));
                         return fetchWithRetry(url, options, retries - 1, backoff * 2);
                     }
-                    throw new Error(`Server Error (${response.status}): ${errorText}`);
+                    throw new Error(`Server Error: ${response.status}`);
                 }
                 return response;
             } catch (err) {
@@ -60,27 +180,15 @@
         };
 
         function App() {
-            const [adText, setAdText] = useState('ကမာရွတ်၊ လှည်းတန်းအနီး\n၁၂ ပေ ၅၀၊ ၆ လွှာ (ဓာတ်လှေကားပါ)\nဈေးနှုန်း - ၁၅၀၀ သိန်း\nကားပါကင်ရ၊ လုံခြုံရေးရှိ\n\nဆက်သွယ်ရန် - 09-12345678');
-            const [textImagePreview, setTextImagePreview] = useState(null);
-            const [imagePreview, setImagePreview] = useState(null);
-            const [logoPreview, setLogoPreview] = useState(null);
             const [chartImagePreview, setChartImagePreview] = useState(null);
-            const [isAnalyzingChart, setIsAnalyzingChart] = useState(false);
-            const [isGenerating, setIsGenerating] = useState(false);
+            const [isAnalyzing, setIsAnalyzing] = useState(false);
             const [error, setError] = useState('');
             
-            const [designData, setDesignData] = useState({
-                title: "အဆင့်မြင့် ကွန်ဒို",
-                subtitle: "ရောင်းရန်ရှိသည်",
-                price: "၁၅၀၀ သိန်း",
-                location: "ကမာရွတ်၊ ရန်ကုန်",
-                features: ["ဓာတ်လှေကားပါ", "ကားပါကင်", "၂၄ နာရီ လုံခြုံရေး"],
-                contact: "09-12345678"
-            });
-
+            // Grid Data
             const [floorConfig, setFloorConfig] = useState({ floors: 6, unitsPerFloor: 2 });
             const [floorUnits, setFloorUnits] = useState({});
 
+            // Initialize Grid
             useEffect(() => {
                 const newUnits = {};
                 for (let f = 1; f <= floorConfig.floors; f++) {
@@ -92,15 +200,6 @@
                 }
                 setFloorUnits(newUnits);
             }, [floorConfig.floors, floorConfig.unitsPerFloor]);
-
-            const handleFileUpload = (e, setPreview) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => setPreview(reader.result);
-                    reader.readAsDataURL(file);
-                }
-            };
 
             const handleChartUpload = async (e) => {
                 const file = e.target.files[0];
@@ -126,30 +225,21 @@
                 });
             };
 
-            // --- MAIN AI ANALYSIS (Fixed & Faster) ---
             const analyzeChartImage = async (base64Image) => {
-                setIsAnalyzingChart(true);
+                setIsAnalyzing(true);
                 setError('');
                 try {
                     const base64Content = base64Image.split(',')[1];
                     const mimeType = base64Image.substring(base64Image.indexOf(":") + 1, base64Image.indexOf(";"));
-
-                    // Simple, fast prompt to avoid timeout
+                    
                     const systemPrompt = `
-                        Analyze this building floor plan image.
-                        Task: Return valid JSON only.
-                        {
-                            "floors": number (Total floors),
-                            "unitsPerFloor": number (Max columns),
-                            "units": [
-                                { "floor": number, "unit": number, "status": "sold" | "available" | "reserved" | "hidden", "price": "string" }
-                            ]
-                        }
+                        Analyze floor plan. Extract GRID + PRICES.
+                        Return JSON: { "floors": n, "unitsPerFloor": n, "units": [{"floor":n, "unit":n, "status":"sold"|"available"|"reserved"|"hidden", "price": "string"}] }
                         Rules:
-                        1. Visual Stack: Read bottom-up (Bottom = Floor 1).
-                        2. "X", "Sold", "Red" -> "sold".
-                        3. Price shown -> "available".
-                        4. PENTHOUSE / GAP: If a floor has fewer units than others, mark the empty space as "hidden".
+                        1. Visual Stack: Bottom = Floor 1.
+                        2. "X"/"Sold"/"Red" = "sold".
+                        3. EXTRACT PRICES (e.g., "1500", "2500"). If price exists, status is "available".
+                        4. PENTHOUSE: If fewer units on top, mark as "hidden".
                     `;
 
                     const payload = {
@@ -157,10 +247,14 @@
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
-                    const response = await fetchWithRetry('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    const data = await response.json();
+                    const response = await fetchWithRetry('/api/generate', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify(payload) 
+                    });
                     
-                    if (!data.candidates) throw new Error("AI did not return a result. Try again.");
+                    const data = await response.json();
+                    if (!data.candidates) throw new Error("AI analysis failed.");
                     
                     const result = JSON.parse(cleanJsonString(data.candidates[0].content.parts[0].text));
 
@@ -169,17 +263,15 @@
                         setFloorConfig({ floors: result.floors, unitsPerFloor: finalUnitsPerFloor });
                         
                         const newUnits = {};
-                        // Init grid
                         for (let f = 1; f <= result.floors; f++) {
                             for (let u = 1; u <= finalUnitsPerFloor; u++) {
                                 newUnits[`${f}-${u}`] = { id: `${f}-${u}`, floor: f, unit: u, status: 'available', price: '' };
                             }
                         }
-                        // Fill data
                         if (result.units) {
                             result.units.forEach(u => {
                                 let mapFloor = u.floor === 0 ? 1 : u.floor;
-                                if (mapFloor > result.floors) mapFloor = result.floors; // Safety
+                                if (mapFloor > result.floors) mapFloor = result.floors;
                                 const id = `${mapFloor}-${u.unit}`;
                                 if (newUnits[id]) {
                                     newUnits[id].status = u.status;
@@ -190,40 +282,10 @@
                         setFloorUnits(newUnits);
                     }
                 } catch (err) { 
-                    console.error(err);
+                    console.error(err); 
                     setError('Error: ' + err.message); 
                 } 
-                finally { setIsAnalyzingChart(false); }
-            };
-
-            const generateDesign = async () => {
-                setIsGenerating(true);
-                setError('');
-                try {
-                    const contentParts = [];
-                    if (adText) contentParts.push({ text: `Rewrite this real estate ad into Burmese JSON: ${adText}` });
-                    if (textImagePreview) {
-                         const base64Content = textImagePreview.split(',')[1];
-                         const mimeType = textImagePreview.substring(textImagePreview.indexOf(":") + 1, textImagePreview.indexOf(";"));
-                         contentParts.push({ inlineData: { mimeType: mimeType, data: base64Content } });
-                    }
-                    if (contentParts.length === 0) throw new Error("No text or screenshot provided.");
-
-                    const systemPrompt = `Return JSON only: { "title": "short title", "subtitle": "tagline", "price": "1500 Lakhs", "location": "loc", "features": ["f1","f2"], "contact": "ph" }`;
-
-                    const payload = {
-                        contents: [{ parts: contentParts }],
-                        systemInstruction: { parts: [{ text: systemPrompt }] },
-                        generationConfig: { responseMimeType: "application/json" }
-                    };
-
-                    const response = await fetchWithRetry('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    const data = await response.json();
-                    const parsedData = JSON.parse(cleanJsonString(data.candidates[0].content.parts[0].text));
-                    
-                    setDesignData(prev => ({...prev, ...parsedData}));
-                } catch (err) { setError(err.message); } 
-                finally { setIsGenerating(false); }
+                finally { setIsAnalyzing(false); }
             };
 
             const gridFloors = useMemo(() => {
@@ -233,167 +295,90 @@
             }, [floorConfig.floors]);
 
             return (
-                <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-20">
-                    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-                        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <div className="bg-[#e30147] p-1.5 rounded text-white"><IconSparkles /></div>
-                                <h1 className="text-xl font-bold text-gray-800">RealEstate<span className="text-[#e30147]">Gen</span></h1>
-                            </div>
-                        </div>
-                    </header>
-
-                    <main className="max-w-7xl mx-auto p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* LEFT PANEL */}
-                        <div className="lg:col-span-4 space-y-6">
-                            
-                            {/* ERROR MESSAGE BOX */}
-                            {error && (
-                                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                                    <strong className="font-bold">Something went wrong! </strong>
-                                    <span className="block sm:inline">{error}</span>
-                                </div>
+                <div className="flex flex-col gap-6 items-center w-full">
+                    
+                    {/* Controls */}
+                    <div className="bg-white p-4 rounded-xl shadow w-full max-w-[500px] border border-gray-200">
+                        <h1 className="text-xl font-bold text-gray-800 mb-4 text-center">Floor Plan Generator</h1>
+                        
+                         <label className="flex items-center justify-center w-full h-16 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition bg-gray-50 mb-4">
+                            {isAnalyzing ? (
+                                <div className="animate-pulse text-blue-600 font-bold text-sm">AI ဖတ်နေပါသည်...</div>
+                            ) : (
+                                chartImagePreview ? <div className="text-green-600 font-bold text-sm">New Image Loaded</div> : <span className="text-gray-400 text-sm font-bold">Screenshot တင်ရန်</span>
                             )}
+                            <input type="file" className="hidden" accept="image/*" onChange={handleChartUpload} disabled={isAnalyzing} />
+                        </label>
 
-                            {/* TEXT INPUT */}
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-lg">
-                                <h2 className="text-lg font-bold mb-4">1. ကြော်ငြာအချက်အလက်</h2>
-                                <textarea value={adText} onChange={(e) => setAdText(e.target.value)} className="w-full h-24 bg-gray-50 border rounded-lg p-3 text-sm outline-none focus:border-[#e30147]" placeholder="Ad Details..." />
-                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                    <label className="border border-dashed p-2 rounded flex items-center justify-center cursor-pointer hover:bg-gray-50 text-xs text-gray-500">
-                                        <IconScan /> <span className="ml-1">Text Image</span>
-                                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, setTextImagePreview)} />
-                                    </label>
-                                    <label className="border border-dashed p-2 rounded flex items-center justify-center cursor-pointer hover:bg-gray-50 text-xs text-gray-500">
-                                        <IconUpload /> <span className="ml-1">Logo</span>
-                                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, setLogoPreview)} />
-                                    </label>
-                                </div>
-                                <button onClick={generateDesign} disabled={isGenerating} className="w-full mt-4 bg-[#e30147] text-white py-2 rounded font-bold disabled:bg-gray-400">
-                                    {isGenerating ? 'Generating...' : 'ဒီဇိုင်းဖန်တီးမည်'}
-                                </button>
-                                
-                                {/* Manual Edit Fields */}
-                                <div className="mt-4 pt-4 border-t space-y-2">
-                                    <input type="text" value={designData.title} onChange={(e) => setDesignData({...designData, title: e.target.value})} className="w-full border rounded px-2 py-1 text-sm" placeholder="Title" />
-                                    <input type="text" value={designData.price} onChange={(e) => setDesignData({...designData, price: e.target.value})} className="w-full border rounded px-2 py-1 text-sm" placeholder="Price" />
-                                </div>
+                         <div className="flex gap-4">
+                            <div className="w-1/2">
+                                <label className="text-[10px] text-gray-400 uppercase font-bold">အထပ်</label>
+                                <input type="number" value={floorConfig.floors} onChange={(e) => setFloorConfig({...floorConfig, floors: +e.target.value})} className="w-full border p-2 rounded text-sm" />
                             </div>
-
-                            {/* CHART INPUT */}
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-lg border-l-4 border-l-[#e30147]">
-                                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">2. အခန်းအနေအထား</h2>
-                                <p className="text-[10px] text-gray-500 mb-2">* Penthouse (၁ ခန်းတွဲ) လိုချင်လျှင် ပိုနေသောအကွက်ကို ၃-၄ ချက်နှိပ်ပြီး ဖျောက်လိုက်ပါ။</p>
-                                
-                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 relative bg-white">
-                                    {isAnalyzingChart ? (
-                                        <div className="flex flex-col items-center text-[#e30147] animate-pulse">
-                                            <div className="w-6 h-6 border-2 border-[#e30147] border-t-transparent rounded-full animate-spin mb-2"></div>
-                                            <span className="text-xs font-bold">AI Analyzing...</span>
-                                        </div>
-                                    ) : (
-                                        chartImagePreview ? <img src={chartImagePreview} className="h-full object-contain" /> : <div className="text-center text-gray-400 text-xs"><IconScan className="mx-auto mb-1"/>Upload Chart</div>
-                                    )}
-                                    <input type="file" className="hidden" onChange={handleChartUpload} disabled={isAnalyzingChart} />
-                                </label>
-
-                                {/* Grid Controls */}
-                                <div className="flex gap-2 mt-4">
-                                    <input type="number" value={floorConfig.floors} onChange={(e) => setFloorConfig({...floorConfig, floors: +e.target.value})} className="w-1/2 border rounded px-2 py-1 text-sm" placeholder="Floors" />
-                                    <input type="number" value={floorConfig.unitsPerFloor} onChange={(e) => setFloorConfig({...floorConfig, unitsPerFloor: +e.target.value})} className="w-1/2 border rounded px-2 py-1 text-sm" placeholder="Units" />
-                                </div>
-
-                                {/* Manual Grid */}
-                                <div className="mt-4 border rounded p-2 bg-gray-50 max-h-48 overflow-y-auto">
-                                    <div className="flex flex-col gap-1">
-                                        {gridFloors.map(f => (
-                                            <div key={f} className="flex gap-1 justify-center">
-                                                <span className="text-[10px] w-4 pt-1 text-gray-400">{f}</span>
-                                                {Array.from({length: floorConfig.unitsPerFloor}).map((_, i) => {
-                                                    const u = i + 1;
-                                                    const id = `${f}-${u}`;
-                                                    const status = floorUnits[id]?.status || 'available';
-                                                    let bg = 'bg-white border-gray-300';
-                                                    if(status === 'sold') bg = 'bg-red-500 border-red-600';
-                                                    if(status === 'hidden') bg = 'bg-gray-200 opacity-20';
-                                                    return (<button key={id} onClick={() => toggleUnitStatus(id)} className={`w-6 h-6 border rounded ${bg}`}></button>)
-                                                })}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                            <div className="w-1/2">
+                                <label className="text-[10px] text-gray-400 uppercase font-bold">အခန်း</label>
+                                <input type="number" value={floorConfig.unitsPerFloor} onChange={(e) => setFloorConfig({...floorConfig, unitsPerFloor: +e.target.value})} className="w-full border p-2 rounded text-sm" />
                             </div>
                         </div>
+                        {error && <div className="mt-2 text-red-600 text-xs">{error}</div>}
+                    </div>
 
-                        {/* RIGHT PREVIEW */}
-                        <div className="lg:col-span-8 flex justify-center">
-                            <div className="w-full max-w-[500px] aspect-[1080/1350] bg-white shadow-2xl flex flex-col overflow-hidden">
-                                {/* Header */}
-                                <div className="h-[12%] px-6 flex items-center justify-between border-b-2 border-[#e30147]">
-                                    <div className="h-full max-w-[150px] flex items-center">{logoPreview ? <img src={logoPreview} className="h-full object-contain"/> : <div className="text-xs font-bold text-gray-300">LOGO</div>}</div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-[#e30147] font-bold">{designData.subtitle}</p>
-                                        <h1 className="text-xl font-bold">{designData.title}</h1>
-                                    </div>
-                                </div>
+                    {/* --- CANVAS 500x1350 --- */}
+                    <div className="canvas-container">
+                        <div className="canvas-header">
+                            <h2 className="text-2xl font-bold tracking-wide">FLOOR PLAN & PRICES</h2>
+                            <p className="text-sm opacity-90 mt-1">Available Units Update</p>
+                        </div>
+                        
+                        <div className="grid-body">
+                            {gridFloors.map(f => (
+                                <div key={f} className="floor-row">
+                                    <div className="floor-label">{f} လွှာ</div>
+                                    <div className="units-container">
+                                        {Array.from({length: floorConfig.unitsPerFloor}).map((_, i) => {
+                                            const u = i + 1;
+                                            const id = `${f}-${u}`;
+                                            const unit = floorUnits[id] || {status: 'available'};
+                                            
+                                            let statusClass = 'status-available';
+                                            let label = 'ရောင်းရန်';
+                                            
+                                            if (unit.status === 'sold') { 
+                                                statusClass = 'status-sold'; 
+                                                label = 'ရောင်းပြီး'; 
+                                            }
+                                            else if (unit.status === 'reserved') { 
+                                                statusClass = 'status-reserved'; 
+                                                label = 'စာရင်းသွင်း'; 
+                                            }
+                                            else if (unit.status === 'hidden') { 
+                                                statusClass = 'status-hidden'; 
+                                                label = ''; 
+                                            }
 
-                                {/* Body */}
-                                <div className="h-[78%] flex">
-                                    <div className="w-[60%] bg-white flex flex-col">
-                                        <div className="h-[55%] bg-gray-200 relative">
-                                            {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover"/> : <div className="flex items-center justify-center h-full text-gray-400 text-xs">Photo</div>}
-                                            <div className="absolute top-4 left-0 bg-[#e30147] text-white px-3 py-1 text-sm font-bold shadow">{designData.price}</div>
-                                        </div>
-                                        <div className="h-[45%] p-4">
-                                            <h3 className="text-[#e30147] font-bold text-sm mb-2 border-l-4 border-[#e30147] pl-2">Features</h3>
-                                            <ul className="text-sm space-y-1">{designData.features.map((f,i)=><li key={i}>• {f}</li>)}</ul>
-                                        </div>
-                                    </div>
-
-                                    {/* Floor Plan */}
-                                    <div className="w-[40%] bg-gray-50 border-l p-2 flex flex-col">
-                                        <h3 className="text-center text-[#e30147] font-bold text-xs mb-2">FLOOR PLAN</h3>
-                                        <div className="flex-1 flex flex-col justify-between overflow-hidden py-2">
-                                            {gridFloors.map((f) => (
-                                                <div key={f} className="flex items-center w-full flex-1 mb-1 max-h-[14%]">
-                                                    <div className="w-5 text-[9px] font-bold text-gray-500 text-right mr-1">{f}</div>
-                                                    <div className="flex-1 flex gap-1 h-full">
-                                                        {Array.from({length: floorConfig.unitsPerFloor}).map((_, i) => {
-                                                            const u = i + 1;
-                                                            const id = `${f}-${u}`;
-                                                            const unit = floorUnits[id] || {};
-                                                            if (unit.status === 'hidden') return <div key={id} className="flex-1 invisible"></div>;
-                                                            
-                                                            let style = "bg-white border-green-500 text-green-700";
-                                                            let text = "Available";
-                                                            if (unit.status === 'sold') { style = "bg-red-500 border-red-500 text-white"; text = "Sold"; }
-                                                            else if (unit.status === 'reserved') { style = "bg-yellow-400 border-yellow-400 text-white"; text = "Booked"; }
-
-                                                            return (
-                                                                <div key={id} className={`flex-1 border-2 rounded flex flex-col items-center justify-center ${style}`}>
-                                                                    {unit.price && <span className="text-[6px] bg-white/80 px-0.5 rounded text-black mb-0.5">{unit.price}</span>}
-                                                                    <span className="text-[7px] font-bold leading-none">{text}</span>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
+                                            return (
+                                                <div 
+                                                    key={id} 
+                                                    onClick={() => toggleUnitStatus(id)}
+                                                    className={`unit-cell ${statusClass}`}
+                                                >
+                                                    {unit.price && unit.status === 'available' && (
+                                                        <span className="price-text">{unit.price}</span>
+                                                    )}
+                                                    <span className="status-text">{label}</span>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
-
-                                {/* Footer */}
-                                <div className="h-[10%] bg-gray-900 text-white flex items-center justify-between px-6 relative overflow-hidden">
-                                    <div className="absolute right-0 h-full w-1/2 bg-[#e30147] transform skew-x-12 translate-x-8"></div>
-                                    <div className="relative z-10 flex items-center gap-2">
-                                        <IconPhone />
-                                        <div><p className="text-[8px] uppercase">Contact</p><p className="font-bold">{designData.contact}</p></div>
-                                    </div>
-                                </div>
-                            </div>
+                            ))}
                         </div>
-                    </main>
+
+                        <div className="canvas-footer">
+                            Generated by AI RealEstate
+                        </div>
+                    </div>
+                    
                 </div>
             );
         }
